@@ -1,0 +1,31 @@
+# Local configuration and secrets
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.jks
+env.properties
+
+# Dependencies and build output
+node_modules/
+target/
+dist/
+.angular/
+out-tsc/
+
+# Local databases
+*.mv.db
+*.trace.db
+data/
+
+# IDE / OS
+.idea/
+.vscode/
+.classpath
+.project
+.settings/
+*.iml
+.DS_Store
+Thumbs.db
+*.log

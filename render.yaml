@@ -1,0 +1,40 @@
+# Render blueprint: the Car Rental API on the free plan, built from its Dockerfile.
+# The web app is deployed separately to Vercel (see README, "Deploying"); Vercel forwards /api to this service.
+services:
+  - type: web
+    name: carrental-api
+    runtime: docker
+    plan: free
+    dockerfilePath: ./backend/Dockerfile
+    dockerContext: ./backend
+    healthCheckPath: /v3/api-docs
+    autoDeploy: true
+    buildFilter:
+      paths:
+        - backend/**
+        - render.yaml
+    envVars:
+      # "prod": the API refuses to start with the published development JWT key
+      - key: SPRING_PROFILES_ACTIVE
+        value: prod
+      - key: JWT_SECRET
+        generateValue: true
+      # 512 MB instance: keep the heap small
+      - key: JAVA_TOOL_OPTIONS
+        value: -Xmx320m -XX:+UseSerialGC -XX:MaxMetaspaceSize=128m
+      # Demo mode: seeds a small agency (cars, clients, contracts, expenses, partners, staff) on an empty database
+      - key: DEMO_DATA
+        value: "true"
+      - key: DEMO_PASSWORD
+        value: "Rental@2026!"
+      - key: ADMIN_USERNAME
+        value: admin
+      # --- set these in the Render dashboard (never commit them) ---
+      - key: DB_URL          # jdbc:mysql://HOST:4000/carrental?sslMode=VERIFY_IDENTITY (TLS for managed MySQL)
+        sync: false
+      - key: DB_USERNAME
+        sync: false
+      - key: DB_PASSWORD
+        sync: false
+      - key: ADMIN_PASSWORD
+        sync: false
