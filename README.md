@@ -4,6 +4,8 @@ A back office for a car-rental agency: the fleet, clients, rental contracts with
 
 **Spring Boot 3 · Java 21 · MySQL · JWT (access + refresh) · Angular 18 · Angular Material · Docker**
 
+**Live demo:** https://carrental-platform.vercel.app (sign in as `manager` or `reception`, password `Rental@2026!`; the free API sleeps when idle, so the first request after a pause takes about a minute). Demo data only.
+
 | Dashboard with the daily alerts | A contract priced by the rules (season, long stay) |
 | --- | --- |
 | ![Dashboard](docs/screenshots/dashboard-alerts.png) | ![Quote](docs/screenshots/contract-quote.png) |
