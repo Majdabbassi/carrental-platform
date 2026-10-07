@@ -9,6 +9,8 @@ import com.back.car_rent.model.EmergencyContact;
 import com.back.car_rent.model.Expense;
 import com.back.car_rent.model.Partner;
 import com.back.car_rent.model.User;
+import com.back.car_rent.payments.Payment;
+import com.back.car_rent.payments.PaymentRepository;
 import com.back.car_rent.pricing.PricingRule;
 import com.back.car_rent.pricing.PricingRuleRepository;
 import com.back.car_rent.repository.CarRepository;
@@ -48,6 +50,7 @@ public class DataSeeder implements CommandLineRunner {
     private final ExpenseRepository expenses;
     private final PartnerRepository partners;
     private final PricingRuleRepository pricingRules;
+    private final PaymentRepository payments;
     private final PasswordEncoder encoder;
 
     @Value("${app.admin.username:admin}")
@@ -63,7 +66,7 @@ public class DataSeeder implements CommandLineRunner {
 
     public DataSeeder(UserRepository users, CarRepository cars, ClientRepository clients, ContractRepository contracts,
                       EmployeeRepository employees, ExpenseRepository expenses, PartnerRepository partners,
-                      PricingRuleRepository pricingRules, PasswordEncoder encoder) {
+                      PricingRuleRepository pricingRules, PaymentRepository payments, PasswordEncoder encoder) {
         this.users = users;
         this.cars = cars;
         this.clients = clients;
@@ -72,6 +75,7 @@ public class DataSeeder implements CommandLineRunner {
         this.expenses = expenses;
         this.partners = partners;
         this.pricingRules = pricingRules;
+        this.payments = payments;
         this.encoder = encoder;
     }
 
@@ -89,6 +93,10 @@ public class DataSeeder implements CommandLineRunner {
         }
         if (demoData && cars.count() == 0) {
             seedDemoAgency();
+        }
+        // also runs once on a demo database created before payments existed
+        if (demoData && payments.count() == 0 && contracts.count() > 0) {
+            seedDemoPayments();
         }
     }
 
@@ -154,6 +162,29 @@ public class DataSeeder implements CommandLineRunner {
         partner("PT-003", "Sahara Tours", "Tour operator", "Rim Chaabane", "+216 71 200 003", "bookings@sahara-tours.example");
 
         log.info("Seeded the demo agency (cars, clients, contracts, expenses, partners, staff accounts).");
+    }
+
+    /** Payments that match each demo contract's status: Paid in full, Partial for half, nothing for Pending. */
+    private void seedDemoPayments() {
+        int n = 0;
+        for (Contract c : contracts.findAll()) {
+            double total = c.getTotalValue() == null ? 0 : c.getTotalValue();
+            double amount = "Paid".equals(c.getPaymentStatus()) ? total
+                    : "Partial".equals(c.getPaymentStatus()) ? Math.round(total / 2) : 0;
+            if (amount <= 0 || "Canceled".equals(c.getStatus())) {
+                continue;
+            }
+            n++;
+            payments.save(Payment.builder().paymentId("PY-" + (1000 + n)).contractRef(c.getId())
+                    .contractId(c.getContractId()).clientName(c.getClientName()).amount(amount)
+                    .method(c.getPaymentMethod() == null ? "Cash" : c.getPaymentMethod())
+                    .date(earliest(c.getStartDate(), LocalDate.now().toString())).build());
+        }
+        log.info("Seeded {} demo payments.", n);
+    }
+
+    private static String earliest(String a, String b) {
+        return a == null || a.compareTo(b) > 0 ? b : a; // ISO dates compare as text
     }
 
     private static AccessRights rights(boolean dashboard, boolean cars, boolean clients, boolean contracts,

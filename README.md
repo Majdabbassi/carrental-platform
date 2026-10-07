@@ -1,6 +1,6 @@
 # Car Rental Manager
 
-A back office for a car-rental agency: the fleet, clients, rental contracts on a calendar, pricing rules, expenses, partner companies and staff. The manager decides which sections each employee may open (a receptionist can write contracts but never see expenses), and the **API enforces it**, not just the menu. Two people booking the same car for the same days cannot both succeed.
+A back office for a car-rental agency: the fleet, clients, rental contracts on a calendar, pricing rules, payments, reports, expenses, partner companies and staff. The manager decides which sections each employee may open (a receptionist can write contracts but never see expenses), and the **API enforces it**, not just the menu. Two people booking the same car for the same days cannot both succeed.
 
 **Spring Boot 3.5 · Java 21 · MySQL · JWT (access + refresh) · Angular 18 · Angular Material · Docker**
 
@@ -46,9 +46,13 @@ A second booking of the same car waits at step 1 until the first commits, then s
 
 **Alerts** (`alerts/`). A scheduled job (06:00 by default, and once at start-up) recomputes what needs attention: insurance or registration expiring within 30 days, service due within 14, rentals due back today or overdue. Each alert has a deterministic key (type + car + due date), so a re-run updates instead of duplicating, an alert disappears when its cause is fixed, and a dismissed alert stays dismissed.
 
+**Payments** (`payments/`). Money received is recorded as `Payment` rows against a contract (amount, method, date). A contract's payment status — Pending, Partial or Paid — is **computed** from its payments every time a payment or the contract changes; nobody types it. Recording a payment locks the contract row (`SELECT … FOR UPDATE`, like a booking locks the car), then refuses anything that would pay more than is left, so two people entering a payment at once cannot overpay. A contract with payments cannot be deleted (cancel it instead), and the server copies the contract number and client name onto the payment rather than trusting the form.
+
+**Reports** (`reports/`). `GET /api/reports/summary?from=2026-01&to=2026-06` returns, per month, what was **billed** (contracts starting that month), **collected** (payments dated that month), **spent** (expenses) and the net; **fleet utilization** per car (nights in a reserved, active or completed contract inside the period, out of the nights in the period); revenue by category; and every contract that still has money owed, biggest first. At most 24 months per report.
+
 **PDFs** (`document/ContractDocumentService`). `GET /api/contracts/{id}/pdf?type=contract|invoice` renders the agreement or the invoice with OpenPDF, using the agency name and currency from the configuration.
 
-**Web app** (`frontend/`). A small Angular 18 app: login, dashboard, calendar, and **one config-driven CRUD screen** (`resources.ts` + `resource-dialogs.component.ts`) that renders cars, clients, contracts, expenses, companies, employees and pricing rules from a description of their fields.
+**Web app** (`frontend/`). A small Angular 18 app: login, dashboard, calendar, and **one config-driven CRUD screen** (`resources.ts` + `resource-dialogs.component.ts`) that renders cars, clients, contracts, payments, expenses, companies, employees and pricing rules from a description of their fields, plus a Reports page with charts.
 
 ## Key decisions and trade-offs
 
@@ -62,7 +66,9 @@ A second booking of the same car waits at step 1 until the first commits, then s
    *Why:* storing them is what lets a dismissal stick and lets the job run on a schedule. *Cost:* an alert can be up to a day old between runs (the job also runs on start-up).
 5. **One origin through a Vercel rewrite.**
    *Why:* the browser only talks to `carrental-platform.vercel.app`, so the deployed app needs no CORS setup and no API URL baked into the build. *Cost:* while the free API is asleep the proxy answers 502; the login page treats 0/502/503/504 as "still waking up" and retries for about 3.5 minutes.
-6. **Password-reset tokens are tied to the current password hash.**
+6. **A contract's payment status is computed, not typed.**
+   *Why:* a hand-typed "Paid" drifts from the money actually received; deriving it from the payment rows keeps the contracts list, the reports and the balances in agreement. *Cost:* every payment and every contract save recomputes it (one sum query). *Alternative:* a stored balance updated by triggers or events is faster at scale but easier to get wrong.
+7. **Password-reset tokens are tied to the current password hash.**
    *Why:* the token carries a fingerprint of the hash, so it stops working as soon as the password changes: single use without a token table. *Cost:* none worth noting at this size.
 
 ## Security model
@@ -70,7 +76,7 @@ A second booking of the same car waits at step 1 until the first commits, then s
 | Who | Can do |
 | --- | --- |
 | Super admin, agency admin | everything, including employees, their logins and pricing rules |
-| Employee | only the sections ticked on their record; reading cars and clients comes with the contracts right |
+| Employee | only the sections ticked on their record (dashboard, cars, clients, contracts, payments, companies, expenses, reports); reading cars and clients comes with the contracts right, reading contracts with the payments right |
 | Anyone else | login, refresh, password reset, API docs |
 
 - **Deny-by-default** with method-level checks on every controller; unauthenticated → 401, not allowed → 403, both as JSON.
@@ -88,6 +94,8 @@ A second booking of the same car waits at step 1 until the first commits, then s
 - **Fleet**: cars with picture, category, day/week/month rates, status, mileage, insurance, registration and service dates.
 - **Clients**: contact details, driving licence, emergency contact, status (active, pending verification, blacklisted).
 - **Contracts and calendar**: pick a client and dates, the form offers only free cars, the price is computed by the rules and explained line by line; every rental shows on a month calendar.
+- **Payments**: record what each client paid (cash, card, transfer); the contract's status follows, and overpaying is refused.
+- **Reports**: billed vs collected vs expenses per month, fleet utilization per car, revenue by category and who still owes money.
 - **Pricing rules**: seasons (for example summer ×1.3, optionally one category) and long-stay discounts (7 days or more: 10 % off).
 - **PDFs**: rental agreement and invoice for any contract.
 - **Daily alerts** on the dashboard, with dismiss.
@@ -123,12 +131,13 @@ Try this: sign in as `reception`; the menu has no Expenses or Employees, and ope
 cd backend && mvn test
 ```
 
-22 integration tests start the whole API on an in-memory database (H2 in MySQL mode) and call it over real HTTP.
+27 integration tests start the whole API on an in-memory database (H2 in MySQL mode) and call it over real HTTP.
 
 - **Access control (12)** prove that every endpoint needs a login, that the receptionist and accountant get exactly their sections (read and write), that the menu endpoint matches the rights, that refresh and reset tokens are refused as access tokens, that there is no public registration, that a create never overwrites an existing record, that an admin can create an employee login, that client mistakes are 4xx, and that short or development JWT keys are refused.
 - **Bookings and features (10)** prove that overlaps are refused in every shape (inside, around, across an edge) while back-to-back bookings and canceled contracts are fine, that **8 simultaneous requests for one car produce exactly one booking**, the availability list, the season and long-stay arithmetic (including a season starting mid-rental), who may edit pricing rules, the PDF content and permissions, and the alert life cycle (flagged, dismissed, cleared, new ones appearing).
+- **Payments and reports (5)** prove that only the payments and reports rights open those sections (a payments-only employee may read contracts but not change them), that payments move a contract from Pending to Partial to Paid and back, that overpaying, zero, negative and malformed payments are refused, that a paid contract re-opens when its total goes up, that a contract with payments cannot be deleted, that **8 simultaneous payments on one contract never pay more than it costs**, and that the report's monthly sums, fleet nights (inside the period only), categories and balances are right on a controlled set of contracts.
 
-Each protection was checked by removing it and watching its test fail; without the row lock the race test books the car twice. CI runs the tests, builds the web app and validates the compose file.
+Each protection was checked by removing it and watching its test fail; without the row lock the race test books the car twice, and without the contract lock eight payments of 100 are accepted on a 500 contract. CI runs the tests, builds the web app and validates the compose file.
 
 ## Configuration
 
@@ -156,7 +165,6 @@ Copy `.env.example` to `.env`; every value is optional locally.
 ## Known limits
 
 - The free API sleeps after about 15 minutes idle; the first request after a pause can take from 20 seconds to a few minutes.
-- The **payments** and **reports** access rights can be ticked on an employee but no screen or endpoint uses them yet; a contract's payment status (paid, partial, pending) is a field on the contract.
 - Contract dates are stored as ISO text (`yyyy-MM-dd`, kept from the original schema); they are validated on save and compare correctly as text, but a real `DATE` column would be cleaner.
 - The schema is managed by Hibernate (`ddl-auto=update`), not by migrations.
 - The web app has no unit tests; CI builds it and the API tests cover the rules.
@@ -165,7 +173,7 @@ Copy `.env.example` to `.env`; every value is optional locally.
 
 ```
 backend/    Spring Boot API: controller / service / repository / model, security (JWT, permissions),
-            pricing/, alerts/, document/ (PDFs), integration tests
-frontend/   Angular 18 app: sign-in, dashboard, calendar and one config-driven screen for each resource
+            pricing/, payments/, reports/, alerts/, document/ (PDFs), integration tests
+frontend/   Angular 18 app: sign-in, dashboard, calendar, reports and one config-driven screen for each resource
 docs/       screenshots
 ```

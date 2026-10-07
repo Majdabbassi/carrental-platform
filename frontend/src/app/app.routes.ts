@@ -26,6 +26,11 @@ export const routes: Routes = [
         canActivate: [sectionGuard('contracts')],
         loadComponent: () => import('./features/calendar/calendar.component').then(m => m.CalendarComponent)
       },
+      {
+        path: 'reports',
+        canActivate: [sectionGuard('reports')],
+        loadComponent: () => import('./features/reports/reports.component').then(m => m.ReportsComponent)
+      },
       ...resourceRoutes,
       { path: '', pathMatch: 'full', redirectTo: 'dashboard' }
     ]

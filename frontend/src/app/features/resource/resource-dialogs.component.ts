@@ -274,7 +274,7 @@ export class ResourceFormDialogComponent {
 
   ctl = control;
 
-  options(field: Field): { value: string; label: string }[] {
+  options(field: Field): { value: string | number; label: string }[] {
     if (field.lookup) {
       const rows = this.lookups[field.lookup.source] ?? [];
       const options = rows.map(row => ({ value: (field.lookup!.value ?? field.lookup!.label)(row), label: field.lookup!.label(row) }));

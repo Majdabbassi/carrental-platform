@@ -71,9 +71,15 @@ public class PermissionService {
         return rightsOfCurrentEmployee().map(rights -> has(rights, section)).orElse(false);
     }
 
-    /** Read access: the section itself, or (for cars and clients) the contracts section that needs them. */
+    /**
+     * Read access: the section itself, or a section another one needs to look things up: cars and clients for
+     * whoever writes contracts, contracts for whoever records payments.
+     */
     public boolean canRead(String section) {
         if (can(section)) {
+            return true;
+        }
+        if ("contracts".equals(section) && can("payments")) {
             return true;
         }
         return LOOKUPS_FOR_CONTRACTS.contains(section) && can("contracts");

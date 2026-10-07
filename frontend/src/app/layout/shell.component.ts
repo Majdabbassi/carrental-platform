@@ -20,7 +20,9 @@ const NAV: NavItem[] = [
   { path: '/cars', label: 'Cars', icon: 'directions_car', section: 'cars' },
   { path: '/clients', label: 'Clients', icon: 'groups', section: 'clients' },
   { path: '/partners', label: 'Companies', icon: 'handshake', section: 'partners' },
+  { path: '/payments', label: 'Payments', icon: 'payments', section: 'payments' },
   { path: '/expenses', label: 'Expenses', icon: 'receipt_long', section: 'expenses' },
+  { path: '/reports', label: 'Reports', icon: 'bar_chart', section: 'reports' },
   { path: '/pricing-rules', label: 'Pricing', icon: 'sell', section: 'employees' },
   { path: '/employees', label: 'Employees', icon: 'badge', section: 'employees' }
 ];

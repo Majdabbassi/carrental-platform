@@ -3,10 +3,14 @@ package com.back.car_rent.repository;
 import com.back.car_rent.model.Contract;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
+import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
+import jakarta.persistence.LockModeType;
+
 import java.util.List;
+import java.util.Optional;
 
 public interface ContractRepository extends JpaRepository<Contract, Long>, JpaSpecificationExecutor<Contract> {
 
@@ -24,4 +28,9 @@ public interface ContractRepository extends JpaRepository<Contract, Long>, JpaSp
             + "and c.startDate < :end and c.endDate > :start and c.id <> :excludeId")
     List<Contract> findAllBlocking(@Param("start") String start, @Param("end") String end,
                                    @Param("excludeId") long excludeId);
+
+    /** Row lock on one contract (SELECT ... FOR UPDATE) while a payment is recorded against it. */
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("select c from Contract c where c.id = :id")
+    Optional<Contract> lockById(@Param("id") Long id);
 }

@@ -10,8 +10,8 @@ export interface Field {
   required?: boolean;
   /** Pick the value from another resource; `fill` copies more properties of the picked record into this form. */
   lookup?: {
-    source: 'cars' | 'clients';
-    label: (row: any) => string; value?: (row: any) => string; fill?: Record<string, (row: any) => unknown>;
+    source: 'cars' | 'clients' | 'contracts';
+    label: (row: any) => string; value?: (row: any) => string | number; fill?: Record<string, (row: any) => unknown>;
     /** Offer only the cars that are free between these two date fields. */
     availableBetween?: [string, string];
   };
@@ -135,8 +135,29 @@ export const RESOURCES: Record<string, ResourceConfig> = {
       { key: 'totalValue', label: 'Total value', type: 'number' },
       { key: 'deposit', label: 'Deposit', type: 'number' },
       { key: 'status', label: 'Status', type: 'select', options: ['Reserved', 'Active', 'Completed', 'Canceled'], required: true },
-      { key: 'paymentStatus', label: 'Payment', type: 'select', options: ['Pending', 'Partial', 'Paid'] },
       { key: 'paymentMethod', label: 'Payment method', type: 'select', options: ['Cash', 'Card', 'Bank transfer'] },
+      { key: 'notes', label: 'Notes', type: 'textarea', full: true }
+    ]
+  },
+  payments: {
+    path: 'payments', title: 'Payments', singular: 'payment', icon: 'payments', section: 'payments',
+    columns: [
+      { key: 'paymentId', label: 'Payment' }, { key: 'contractId', label: 'Contract' }, { key: 'clientName', label: 'Client' },
+      { key: 'date', label: 'Date', format: 'date' }, { key: 'method', label: 'Method' }, { key: 'amount', label: 'Amount', format: 'money' }
+    ],
+    searchKeys: ['paymentId', 'contractId', 'clientName', 'method'],
+    fields: [
+      {
+        // the contract's payment status (Pending, Partial, Paid) follows from the payments recorded here
+        key: 'contractRef', label: 'Contract', type: 'select', required: true, full: true,
+        lookup: {
+          source: 'contracts', value: (c: any) => c.id,
+          label: (c: any) => `${c.contractId} · ${c.clientName} · ${c.totalValue ?? 0} (${c.paymentStatus ?? 'Pending'})`
+        }
+      },
+      { key: 'amount', label: 'Amount', type: 'number', required: true },
+      { key: 'date', label: 'Date', type: 'date', required: true },
+      { key: 'method', label: 'Method', type: 'select', options: ['Cash', 'Card', 'Bank transfer'], default: 'Cash' },
       { key: 'notes', label: 'Notes', type: 'textarea', full: true }
     ]
   },

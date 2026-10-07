@@ -3,6 +3,8 @@ package com.back.car_rent.serviceimpl;
 import com.back.car_rent.config.ApiException;
 import com.back.car_rent.model.Car;
 import com.back.car_rent.model.Contract;
+import com.back.car_rent.payments.PaymentRepository;
+import com.back.car_rent.payments.PaymentService;
 import com.back.car_rent.repository.CarRepository;
 import com.back.car_rent.repository.ContractRepository;
 import com.back.car_rent.service.ContractService;
@@ -24,10 +26,15 @@ public class ContractServiceImpl implements ContractService {
 
     private final ContractRepository repo;
     private final CarRepository cars;
+    private final PaymentService payments;
+    private final PaymentRepository paymentRecords;
 
-    public ContractServiceImpl(ContractRepository repo, CarRepository cars) {
+    public ContractServiceImpl(ContractRepository repo, CarRepository cars, PaymentService payments,
+                               PaymentRepository paymentRecords) {
         this.repo = repo;
         this.cars = cars;
+        this.payments = payments;
+        this.paymentRecords = paymentRecords;
     }
 
     @Override
@@ -73,11 +80,16 @@ public class ContractServiceImpl implements ContractService {
                         + " to " + other.getEndDate() + " (contract " + other.getContractId() + ")");
             }
         }
+        // the payment status follows the recorded payments (and the total, which an edit may change)
+        contract.setPaymentStatus(payments.statusOf(contract));
         return repo.save(contract);
     }
 
     @Override
     public void deleteById(Long id) {
+        if (paymentRecords.existsByContractRef(id)) {
+            throw ApiException.conflict("This contract has payments; cancel it instead of deleting it");
+        }
         repo.deleteById(id);
     }
 
